@@ -1,0 +1,223 @@
+
+<h2 class="sr-only">MTG pack opening simulator — select a set and number of packs, then open them to reveal cards with a flip animation.</h2>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans)}
+select,button{height:36px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);font-size:14px;padding:0 12px;background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+button{font-weight:500;transition:background 0.15s,transform 0.1s}
+button:hover:not(:disabled){background:var(--color-background-secondary)}
+button:active:not(:disabled){transform:scale(0.98)}
+button:disabled{opacity:0.4;cursor:not-allowed}
+select{min-width:200px}
+.stat-box{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 16px;text-align:center;min-width:72px}
+.stat-num{font-size:22px;font-weight:500;color:var(--color-text-primary)}
+.stat-lbl{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.card-wrap{perspective:900px}
+.card-inner{position:relative;width:100%;padding-top:139.4%;transform-style:preserve-3d;transition:transform 0.6s cubic-bezier(0.4,0,0.2,1);cursor:pointer}
+.card-wrap.flipped .card-inner{transform:rotateY(180deg)}
+.card-face{position:absolute;top:0;left:0;width:100%;height:100%;backface-visibility:hidden;border-radius:7px;overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
+.card-back{background:#1a1040;overflow:hidden}
+.card-back img{width:100%;height:100%;object-fit:cover;display:block}
+.card-front{transform:rotateY(180deg);background:#111}
+.card-front img{width:100%;height:100%;object-fit:cover;display:block}
+.rarity-dot{position:absolute;bottom:5px;right:5px;width:9px;height:9px;border-radius:50%;border:1px solid rgba(255,255,255,0.6)}
+.foil-label{position:absolute;top:5px;left:5px;font-size:10px;font-weight:500;padding:2px 5px;border-radius:4px;background:rgba(180,160,255,0.85);color:#1a0a40}
+</style>
+
+<div style="padding:1.5rem 0">
+  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:1.5rem">
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <label style="font-size:13px;color:var(--color-text-secondary)">Set</label>
+      <select id="set-select"><option>Loading sets...</option></select>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      <label style="font-size:13px;color:var(--color-text-secondary)">Packs</label>
+      <select id="pack-count" style="min-width:80px">
+        <option>1</option><option>2</option><option>3</option>
+        <option selected>5</option><option>6</option>
+        <option>8</option><option>10</option>
+      </select>
+    </div>
+    <button id="open-btn" disabled>Open packs</button>
+    <button id="flip-all-btn" style="font-size:13px;padding:0 10px;height:30px;display:none">Reveal all</button>
+  </div>
+
+  <div id="stats-row" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem">
+    <div class="stat-box"><div class="stat-num" id="s-mythic" style="color:#c07020">0</div><div class="stat-lbl">Mythic</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-rare" style="color:#aa9900">0</div><div class="stat-lbl">Rare</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-uncommon" style="color:#5588aa">0</div><div class="stat-lbl">Uncommon</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-common">0</div><div class="stat-lbl">Common</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-foil" style="color:#9966cc">0</div><div class="stat-lbl">Foil</div></div>
+    <div class="stat-box"><div class="stat-num" id="s-total">0</div><div class="stat-lbl">Total</div></div>
+  </div>
+
+  <div id="status-msg" style="font-size:14px;color:var(--color-text-secondary);margin-bottom:1rem"></div>
+
+  <div id="cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(254px,1fr));gap:14px"></div>
+</div>
+
+<script>
+const RARITY_COLORS = {mythic:'#c07020',rare:'#aa9900',uncommon:'#5588aa',common:'#888880',land:'#667766'};
+let cardCache = {};
+let flippedCount = 0;
+let totalCards = 0;
+
+async function loadSets() {
+  const sel = document.getElementById('set-select');
+  try {
+    const res = await fetch('https://api.scryfall.com/sets');
+    const data = await res.json();
+    const valid = data.data.filter(s =>
+      ['core','expansion','masters','draft_innovation'].includes(s.set_type) &&
+      s.card_count > 100 && new Date(s.released_at) <= new Date()
+    ).sort((a,b) => new Date(b.released_at) - new Date(a.released_at)).slice(0,600);
+    sel.innerHTML = valid.map(s=>`<option value="${s.code}">${s.name} (${s.released_at.slice(0,4)})</option>`).join('');
+    document.getElementById('open-btn').disabled = false;
+  } catch(e) {
+    sel.innerHTML = '<option>Failed to load sets</option>';
+  }
+}
+
+async function fetchSetCards(setCode) {
+  if (cardCache[setCode]) return cardCache[setCode];
+  document.getElementById('status-msg').textContent = 'Fetching card data...';
+  let cards = [], url = `https://api.scryfall.com/cards/search?q=set:${setCode}+is:booster&order=set`;
+  while (url) {
+    await new Promise(r=>setTimeout(r,80));
+    const res = await fetch(url);
+    const data = await res.json();
+    cards = cards.concat(data.data);
+    url = data.has_more ? data.next_page : null;
+  }
+  cardCache[setCode] = cards;
+  return cards;
+}
+
+function categorize(cards) {
+  const b = {mythic:[],rare:[],uncommon:[],common:[],land:[]};
+  for (const c of cards) {
+    if (c.rarity==='mythic') b.mythic.push(c);
+    else if (c.rarity==='rare') b.rare.push(c);
+    else if (c.rarity==='uncommon') b.uncommon.push(c);
+    else if (c.type_line&&c.type_line.includes('Basic Land')) b.land.push(c);
+    else b.common.push(c);
+  }
+  return b;
+}
+
+function pick(arr, n) {
+  const out=[], pool=[...arr];
+  for (let i=0;i<n&&pool.length;i++) {
+    const idx=Math.floor(Math.random()*pool.length);
+    out.push(pool.splice(idx,1)[0]);
+  }
+  return out;
+}
+
+function buildPack(b) {
+  const pack=[];
+  const isMythic=Math.random()<0.125;
+  const rarePool=isMythic&&b.mythic.length?b.mythic:b.rare;
+  pack.push(...pick(rarePool,1).map(c=>({...c,_rarity:isMythic?'mythic':'rare'})));
+  pack.push(...pick(b.uncommon,3).map(c=>({...c,_rarity:'uncommon'})));
+  pack.push(...pick(b.common,10).map(c=>({...c,_rarity:'common'})));
+  const lp=b.land.length?b.land:b.common;
+  pack.push(...pick(lp,1).map(c=>({...c,_rarity:'land'})));
+  const fi=Math.random()<0.25?Math.floor(Math.random()*pack.length):-1;
+  if(fi>=0) pack[fi]._foil=true;
+  return pack;
+}
+
+function getImg(card) {
+  if (card.image_uris) return card.image_uris.normal||card.image_uris.large;
+  if (card.card_faces&&card.card_faces[0].image_uris) return card.card_faces[0].image_uris.normal;
+  return null;
+}
+
+function renderCards(packs) {
+  const grid=document.getElementById('cards-grid');
+  grid.innerHTML='';
+  let stats={mythic:0,rare:0,uncommon:0,common:0,foil:0,total:0};
+  flippedCount=0; totalCards=0;
+
+  for (const pack of packs) {
+    for (const card of pack) {
+      totalCards++;
+      const r=card._rarity;
+      if(r==='mythic') stats.mythic++;
+      else if(r==='rare') stats.rare++;
+      else if(r==='uncommon') stats.uncommon++;
+      else stats.common++;
+      if(card._foil) stats.foil++;
+      stats.total++;
+
+      const wrap=document.createElement('div');
+      wrap.className='card-wrap';
+      const imgSrc=getImg(card);
+      const dotColor=RARITY_COLORS[r]||'#888';
+      wrap.innerHTML=`<div class="card-inner">
+        <div class="card-face card-back"><img src="https://cards.scryfall.io/back.png" alt="Card back"></div>
+        <div class="card-face card-front">
+          ${imgSrc?`<img src="${imgSrc}" alt="${card.name}" loading="lazy">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#aaa;padding:8px;text-align:center">${card.name}</div>`}
+          <div class="rarity-dot" style="background:${dotColor}"></div>
+          ${card._foil?'<div class="foil-label">foil</div>':''}
+        </div>
+      </div>`;
+      wrap.addEventListener('click',()=>{
+        if(!wrap.classList.contains('flipped')){
+          wrap.classList.add('flipped');
+          flippedCount++;
+          if(flippedCount===totalCards) document.getElementById('flip-all-btn').textContent='Flip all back';
+        }
+      });
+      grid.appendChild(wrap);
+    }
+  }
+
+  document.getElementById('s-mythic').textContent=stats.mythic;
+  document.getElementById('s-rare').textContent=stats.rare;
+  document.getElementById('s-uncommon').textContent=stats.uncommon;
+  document.getElementById('s-common').textContent=stats.common;
+  document.getElementById('s-foil').textContent=stats.foil;
+  document.getElementById('s-total').textContent=stats.total;
+  document.getElementById('stats-row').style.display='flex';
+  document.getElementById('flip-all-btn').style.display='';
+  document.getElementById('flip-all-btn').textContent='Reveal all';
+}
+
+document.getElementById('open-btn').addEventListener('click',async()=>{
+  const setCode=document.getElementById('set-select').value;
+  const numPacks=parseInt(document.getElementById('pack-count').value);
+  const btn=document.getElementById('open-btn');
+  const msg=document.getElementById('status-msg');
+  btn.disabled=true;
+  document.getElementById('flip-all-btn').style.display='none';
+  document.getElementById('stats-row').style.display='none';
+  document.getElementById('cards-grid').innerHTML='';
+  try {
+    const cards=await fetchSetCards(setCode);
+    const buckets=categorize(cards);
+    if(!buckets.rare.length&&!buckets.mythic.length){
+      msg.textContent='Not enough cards found for this set. Try another.';
+      btn.disabled=false; return;
+    }
+    const packs=[];
+    for(let i=0;i<numPacks;i++) packs.push(buildPack(buckets));
+    msg.textContent=`Opened ${numPacks} pack${numPacks>1?'s':''} — click cards to reveal!`;
+    renderCards(packs);
+  } catch(e) {
+    msg.textContent='Error loading cards. Please try again.';
+  }
+  btn.disabled=false;
+});
+
+document.getElementById('flip-all-btn').addEventListener('click',()=>{
+  const wraps=document.querySelectorAll('.card-wrap');
+  const anyUnflipped=[...wraps].some(w=>!w.classList.contains('flipped'));
+  wraps.forEach(w=>anyUnflipped?w.classList.add('flipped'):w.classList.remove('flipped'));
+  flippedCount=anyUnflipped?totalCards:0;
+  document.getElementById('flip-all-btn').textContent=anyUnflipped?'Flip all back':'Reveal all';
+});
+
+loadSets();
+</script>
