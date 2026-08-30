@@ -30,6 +30,11 @@ input[type=number]{cursor:text}
 .pack-delta-pos{color:#2f9e44;font-weight:600}
 .pack-delta-neg{color:#e03131;font-weight:600}
 .pack-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(254px,1fr));gap:22px}
+#best-pull-section{margin-bottom:2rem;padding-bottom:1.75rem;border-bottom:0.5px solid var(--color-border-secondary);text-align:center}
+.best-pull-label{font-size:13px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--color-text-secondary);margin-bottom:14px}
+.best-pull-card-wrapper{display:flex;justify-content:center}
+.card-wrap-featured{width:320px;filter:drop-shadow(0 10px 26px rgba(0,0,0,0.28))}
+.best-pull-caption{margin-top:14px;font-size:16px;font-weight:600;color:var(--color-text-primary)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .hero-title{
   margin:0;text-align:center;
@@ -115,7 +120,7 @@ input[type=number]{cursor:text}
   </main>
 
   <footer style="padding:1rem 1.5rem;border-top:0.5px solid var(--color-border-secondary);font-size:12px;line-height:1.5;color:var(--color-text-secondary);text-align:center">
-    This is an unofficial fan project and is not affiliated with, endorsed, or sponsored by Wizards of the Coast or Hasbro. Magic: The Gathering, card names, and card images are property of Wizards of the Coast LLC. Card data and images are provided by <a href="https://scryfall.com" target="_blank" rel="noopener" style="color:inherit">Scryfall</a>. Card values are market prices sourced from TCGplayer via Scryfall's pricing data, updated periodically — treat them as an estimate, not a live quote.
+    This is an unofficial fan project and is not affiliated with, endorsed, or sponsored by Wizards of the Coast or Hasbro. Magic: The Gathering, card names, and card images are property of Wizards of the Coast LLC. Card data and images are provided by <a href="https://scryfall.com" target="_blank" rel="noopener" style="color:inherit">Scryfall</a>. Card values prefer Card Kingdom's retail price when available (a single retailer's own set price) and fall back to TCGplayer's market price via Scryfall (an average of recent sales) otherwise. Either can still be off for rare, low-volume cards — click a revealed card to check its real current listings before trusting a big number.
   </footer>
 </div>
 
@@ -206,8 +211,10 @@ function foilLabelFor(card) {
 // TCGplayer (USD) — free to read on every card object, no extra request needed
 // for cards that already came from a Scryfall fetch. Picks the price matching
 // the actual finish pulled, falling back to the plain price if a specific
-// foil/etched price isn't listed.
-function cardValue(card) {
+// foil/etched price isn't listed. This is TCGplayer's *Market Price* — an
+// average of recent sales, which can be skewed for rare/low-volume cards
+// (see cardKingdomValue below for a steadier alternative where available).
+function tcgplayerValue(card) {
   if (!card.prices) return null;
   const p = card.prices;
   let v = null;
@@ -218,6 +225,68 @@ function cardValue(card) {
   }
   if (v==null) v = p.usd;
   return v!=null ? parseFloat(v) : null;
+}
+
+// Card Kingdom publishes an unofficial-but-public price list (used by several
+// third-party MTG tools) that's a single retailer's own set retail price,
+// rather than an average of many marketplace sales — so it isn't vulnerable
+// to the "one weird outlier sale" skew TCGplayer's Market Price can have.
+// Each entry carries a scryfall_id directly, so matching is exact, no fuzzy
+// name lookups needed. Used regardless of current stock (qty_retail) — their
+// listed price is still a trustworthy reference for a Near Mint copy even
+// when they're sold out, especially for rarer cards that turn over slowly.
+// This is undocumented and not an official developer API, so browser CORS
+// access is unconfirmed — fails soft to TCGplayer if blocked, missing, or
+// shaped unexpectedly.
+let ckPriceCache = null;
+let ckPriceFetchPromise = null;
+// Card Kingdom's `url` field is sometimes a bare relative path (e.g.
+// "mtg/beta/badlands") rather than a full URL. Used as-is, the browser
+// resolves it against wherever this page itself is loaded from — harmless on
+// a real site, but breaks completely (or opens the wrong page) if this file
+// is opened locally via file://. Always force it to an absolute cardkingdom.com URL.
+function absoluteCardKingdomUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://www.cardkingdom.com/${url.replace(/^\/+/, '')}`;
+}
+async function fetchCardKingdomPrices() {
+  if (ckPriceCache) return ckPriceCache;
+  if (ckPriceFetchPromise) return ckPriceFetchPromise;
+  ckPriceFetchPromise = (async () => {
+    const index = {};
+    try {
+      const res = await fetch('https://api.cardkingdom.com/api/v2/pricelist');
+      if (res.ok) {
+        const json = await res.json();
+        const list = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : []);
+        for (const p of list) {
+          if (!p.scryfall_id || p.price_retail==null) continue;
+          const price = parseFloat(p.price_retail);
+          if (!isFinite(price)) continue;
+          const isFoil = p.is_foil===true || p.is_foil==='true';
+          index[`${p.scryfall_id}_${isFoil?'foil':'nonfoil'}`] = {price, url: absoluteCardKingdomUrl(p.url)};
+        }
+      }
+    } catch(e) { /* CORS-blocked or endpoint unavailable — leave index empty, fall back to TCGplayer */ }
+    ckPriceCache = index;
+    return index;
+  })();
+  return ckPriceFetchPromise;
+}
+function cardKingdomValue(card) {
+  if (!ckPriceCache) return null;
+  const sid = card.id || card._scryfallId;
+  if (!sid) return null;
+  return ckPriceCache[`${sid}_${card._foil?'foil':'nonfoil'}`] || null;
+}
+
+// Prefers Card Kingdom's steadier single-retailer price when available and
+// in stock; falls back to TCGplayer's market price via Scryfall otherwise.
+function resolveCardPricing(card) {
+  const ck = cardKingdomValue(card);
+  if (ck) return {value: ck.price, url: ck.url || tcgplayerCardUrl(card), source: 'Card Kingdom'};
+  return {value: tcgplayerValue(card), url: tcgplayerCardUrl(card), source: 'TCGplayer'};
 }
 
 // Card purchase links: Scryfall's `purchase_uris.tcgplayer` is free on every
@@ -310,7 +379,7 @@ async function loadSets() {
 
 // A plain TCGplayer search link always works and needs no extra data.
 function tcgplayerSearchUrl(setName, packType) {
-  const term = `${setName} ${packType==='collector'?'Collector Booster':'Play Booster'}`;
+  const term = `${setName} ${packType==='collector'?'Collector Booster Pack':'Play Booster Pack'}`;
   return `https://www.tcgplayer.com/search/magic/product?productLineName=magic&q=${encodeURIComponent(term)}&view=grid`;
 }
 
@@ -335,9 +404,12 @@ async function updateTcgLink() {
       const wantCollector = packType==='collector';
       const match = setData.sealedProduct.find(p => {
         const cat = (p.category||'').toLowerCase();
-        if (!cat.includes('booster')) return false;
         const sub = ((p.subtype||'')+' '+(p.name||'')).toLowerCase();
-        const isCollector = sub.includes('collector');
+        const combined = cat+' '+sub;
+        if (!combined.includes('booster')) return false;
+        // Exclude multi-pack products — "booster" alone also matches Booster Box/Case/Bundle.
+        if (/\b(box|case|bundle|brick|display)\b/.test(combined)) return false;
+        const isCollector = combined.includes('collector');
         return wantCollector ? isCollector : !isCollector;
       });
       const pid = match && match.identifiers && match.identifiers.tcgplayerProductId;
@@ -718,11 +790,75 @@ function getImg(card) {
   return null;
 }
 
+// Builds one card tile. `featured` renders it pre-flipped and slightly larger
+// (used for the best-pull showcase) instead of the normal face-down-until-
+// clicked tile used in the pack grids.
+function createCardElement(card, featured) {
+  const r=card._rarity;
+  const pricing=resolveCardPricing(card);
+  const value=pricing.value;
+  const wrap=document.createElement('div');
+  wrap.className='card-wrap';
+  const imgSrc=getImg(card);
+  const dotColor=RARITY_COLORS[r]||'#888';
+  const isFullArt=!!card.full_art;
+  const foilLabel=foilLabelFor(card);
+  const rings=[];
+  if(r==='mythic') rings.push(HIGHLIGHT_COLORS.mythic);
+  else if(r==='rare') rings.push(HIGHLIGHT_COLORS.rare);
+  if(card._foil) rings.push(HIGHLIGHT_COLORS.foil);
+  let glowClass='', glowVars='';
+  if(rings.length===1){ glowClass='glow-1'; glowVars=`--ring-a:${rings[0]};`; }
+  else if(rings.length===2){ glowClass='glow-2'; glowVars=`--ring-a:${rings[0]};--ring-b:${rings[1]};`; }
+  const priceTitle=pricing.source==='Card Kingdom'
+    ? 'Card Kingdom retail price — a single retailer\'s set price. Click the card to check current listings.'
+    : 'TCGplayer market price — an average of recent sales, which can be skewed for rare/low-volume cards. Click the card to check current real listings.';
+  wrap.innerHTML=`<div class="card-inner">
+    <div class="card-face card-back"><img src="https://cards.scryfall.io/back.png" alt="Card back"></div>
+    <div class="card-face card-front ${glowClass}" style="${glowVars}">
+      ${imgSrc?`<img src="${imgSrc}" alt="${card.name}" loading="lazy">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#aaa;padding:8px;text-align:center">${card.name}</div>`}
+      <div class="rarity-dot" style="background:${dotColor}"></div>
+      ${foilLabel?`<div class="foil-label">${foilLabel}</div>`:''}
+      ${isFullArt?'<div class="fullart-label">full art</div>':''}
+      ${card._bonusSheet?`<div class="bonus-label">${card._bonusSheet}</div>`:''}
+      ${value!=null?`<div class="price-tag" title="${priceTitle}">$${value.toFixed(2)}</div>`:''}
+    </div>
+  </div>`;
+  wrap._buyUrl=pricing.url;
+  wrap._buySource=pricing.source;
+  wrap._value=value;
+  if (featured) {
+    wrap.classList.add('flipped','card-wrap-featured');
+    wrap.title=wrap._buyUrl?`Click to view on ${wrap._buySource}`:'';
+  } else {
+    wrap.title='Click to reveal';
+  }
+  wrap.addEventListener('click',()=>{
+    if(!wrap.classList.contains('flipped')){
+      wrap.classList.add('flipped');
+      flippedCount++;
+      wrap.title=wrap._buyUrl?`Click to view on ${wrap._buySource}`:'';
+      if(flippedCount===totalCards) {
+        document.getElementById('flip-all-btn').style.display='none';
+        document.getElementById('stats-row').style.display='flex';
+        document.querySelectorAll('.pack-value-info').forEach(el=>el.style.display='');
+        const bp=document.getElementById('best-pull-section');
+        if(bp) bp.style.display='';
+      }
+    } else if(wrap._buyUrl) {
+      window.open(wrap._buyUrl,'_blank','noopener');
+    }
+  });
+  return wrap;
+}
+
 function renderCards(packs, pricePerPack) {
   const grid=document.getElementById('cards-grid');
   grid.innerHTML='';
   let stats={mythic:0,rare:0,uncommon:0,common:0,foil:0,token:0,total:0,value:0};
   flippedCount=0; totalCards=0;
+  let bestPull=null, bestValue=-Infinity;
+  const packGroups=[];
 
   packs.forEach((pack, packIdx) => {
     const packGroup=document.createElement('div');
@@ -743,49 +879,13 @@ function renderCards(packs, pricePerPack) {
       else stats.common++;
       if(card._foil) stats.foil++;
       stats.total++;
-      const value=cardValue(card);
-      if (value!=null) { packValue+=value; stats.value+=value; }
 
-      const wrap=document.createElement('div');
-      wrap.className='card-wrap';
-      const imgSrc=getImg(card);
-      const dotColor=RARITY_COLORS[r]||'#888';
-      const isFullArt=!!card.full_art;
-      const foilLabel=foilLabelFor(card);
-      const rings=[];
-      if(r==='mythic') rings.push(HIGHLIGHT_COLORS.mythic);
-      else if(r==='rare') rings.push(HIGHLIGHT_COLORS.rare);
-      if(card._foil) rings.push(HIGHLIGHT_COLORS.foil);
-      let glowClass='', glowVars='';
-      if(rings.length===1){ glowClass='glow-1'; glowVars=`--ring-a:${rings[0]};`; }
-      else if(rings.length===2){ glowClass='glow-2'; glowVars=`--ring-a:${rings[0]};--ring-b:${rings[1]};`; }
-      wrap.innerHTML=`<div class="card-inner">
-        <div class="card-face card-back"><img src="https://cards.scryfall.io/back.png" alt="Card back"></div>
-        <div class="card-face card-front ${glowClass}" style="${glowVars}">
-          ${imgSrc?`<img src="${imgSrc}" alt="${card.name}" loading="lazy">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#aaa;padding:8px;text-align:center">${card.name}</div>`}
-          <div class="rarity-dot" style="background:${dotColor}"></div>
-          ${foilLabel?`<div class="foil-label">${foilLabel}</div>`:''}
-          ${isFullArt?'<div class="fullart-label">full art</div>':''}
-          ${card._bonusSheet?`<div class="bonus-label">${card._bonusSheet}</div>`:''}
-          ${value!=null?`<div class="price-tag">$${value.toFixed(2)}</div>`:''}
-        </div>
-      </div>`;
-      wrap.title='Click to reveal';
-      wrap._tcgUrl=tcgplayerCardUrl(card);
-      wrap.addEventListener('click',()=>{
-        if(!wrap.classList.contains('flipped')){
-          wrap.classList.add('flipped');
-          flippedCount++;
-          wrap.title=wrap._tcgUrl?'Click to view on TCGplayer':'';
-          if(flippedCount===totalCards) {
-            document.getElementById('flip-all-btn').style.display='none';
-            document.getElementById('stats-row').style.display='flex';
-            document.querySelectorAll('.pack-value-info').forEach(el=>el.style.display='');
-          }
-        } else if(wrap._tcgUrl) {
-          window.open(wrap._tcgUrl,'_blank','noopener');
-        }
-      });
+      const wrap=createCardElement(card, false);
+      const value=wrap._value;
+      if (value!=null) {
+        packValue+=value; stats.value+=value;
+        if (value>bestValue) { bestValue=value; bestPull={card, packIdx}; }
+      }
       cardsGrid.appendChild(wrap);
     }
 
@@ -795,8 +895,29 @@ function renderCards(packs, pricePerPack) {
     header.innerHTML=`<span class="pack-title">Pack ${packIdx+1}</span><span class="pack-value-info" style="display:none">$${packValue.toFixed(2)} pulled</span><span class="pack-value-info ${deltaClass}" style="display:none">${deltaSign}$${Math.abs(delta).toFixed(2)}</span><span class="pack-value-info" style="display:none">(cost $${pricePerPack.toFixed(2)})</span>`;
     packGroup.appendChild(header);
     packGroup.appendChild(cardsGrid);
-    grid.appendChild(packGroup);
+    packGroups.push(packGroup);
   });
+
+  // Best-pull showcase goes first, but stays hidden until full reveal like everything else.
+  if (bestPull) {
+    const section=document.createElement('div');
+    section.id='best-pull-section';
+    section.style.display='none';
+    const label=document.createElement('div');
+    label.className='best-pull-label';
+    label.textContent='🏆 Best Pull';
+    const wrapperOuter=document.createElement('div');
+    wrapperOuter.className='best-pull-card-wrapper';
+    wrapperOuter.appendChild(createCardElement(bestPull.card, true));
+    const caption=document.createElement('div');
+    caption.className='best-pull-caption';
+    caption.textContent=`${bestPull.card.name} — $${bestValue.toFixed(2)} · Pack ${bestPull.packIdx+1}`;
+    section.appendChild(label);
+    section.appendChild(wrapperOuter);
+    section.appendChild(caption);
+    grid.appendChild(section);
+  }
+  packGroups.forEach(pg=>grid.appendChild(pg));
 
   const totalCost=pricePerPack*packs.length;
   const totalPL=stats.value-totalCost;
@@ -877,7 +998,7 @@ document.getElementById('open-btn').addEventListener('click',async()=>{
       if (bonusSheet) eraNote+=`; includes ${bonusSheet.name} bonus sheet`;
     }
     msg.textContent='Fetching card values...';
-    await enrichWithPrices(packs);
+    await Promise.all([enrichWithPrices(packs), fetchCardKingdomPrices()]);
     let pricePerPack=parseFloat(document.getElementById('pack-price').value);
     if (!isFinite(pricePerPack) || pricePerPack<0) pricePerPack=0;
     msg.textContent=`Opened ${numPacks} pack${numPacks>1?'s':''} — click cards to reveal! (${eraNote})`;
@@ -902,14 +1023,17 @@ document.getElementById('flip-all-btn').addEventListener('click',()=>{
   wraps.forEach(w=>{
     if (!w.classList.contains('flipped')) {
       w.classList.add('flipped');
-      w.title=w._tcgUrl?'Click to view on TCGplayer':'';
+      w.title=w._buyUrl?`Click to view on ${w._buySource}`:'';
     }
   });
   flippedCount=totalCards;
   document.getElementById('stats-row').style.display='flex';
   document.querySelectorAll('.pack-value-info').forEach(el=>el.style.display='');
+  const bp=document.getElementById('best-pull-section');
+  if(bp) bp.style.display='';
   document.getElementById('flip-all-btn').style.display='none';
 });
 
 loadSets();
+fetchCardKingdomPrices(); // kick off in the background so it's likely ready by the first "Open packs" click
 </script>
