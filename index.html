@@ -1,14 +1,13 @@
-
-<h2 class="sr-only">MTG pack opening simulator — select a set and number of packs, then open them to reveal cards with a flip animation.</h2>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-sans)}
-select,button{height:36px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);font-size:14px;padding:0 12px;background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
+select,button,input{height:36px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);font-size:14px;padding:0 12px;background:var(--color-background-primary);color:var(--color-text-primary);cursor:pointer}
 button{font-weight:500;transition:background 0.15s,transform 0.1s}
 button:hover:not(:disabled){background:var(--color-background-secondary)}
 button:active:not(:disabled){transform:scale(0.98)}
 button:disabled{opacity:0.4;cursor:not-allowed}
 select{min-width:200px}
+input[type=number]{cursor:text}
 .stat-box{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px 16px;text-align:center;min-width:72px}
 .stat-num{font-size:22px;font-weight:500;color:var(--color-text-primary)}
 .stat-lbl{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
@@ -22,75 +21,554 @@ select{min-width:200px}
 .card-front img{width:100%;height:100%;object-fit:cover;display:block}
 .rarity-dot{position:absolute;bottom:5px;right:5px;width:9px;height:9px;border-radius:50%;border:1px solid rgba(255,255,255,0.6)}
 .foil-label{position:absolute;top:5px;left:5px;font-size:10px;font-weight:500;padding:2px 5px;border-radius:4px;background:rgba(180,160,255,0.85);color:#1a0a40}
+.fullart-label{position:absolute;bottom:5px;left:5px;font-size:10px;font-weight:500;padding:2px 5px;border-radius:4px;background:rgba(120,200,180,0.85);color:#063d33}
+.bonus-label{position:absolute;top:5px;right:5px;font-size:9px;font-weight:500;padding:2px 5px;border-radius:4px;background:rgba(255,190,120,0.9);color:#4a2600;max-width:70%;text-align:right;line-height:1.2}
+.price-tag{position:absolute;bottom:5px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:rgba(15,15,15,0.78);color:#fff;white-space:nowrap}
+.pack-group{margin-bottom:1.75rem}
+.pack-header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;font-size:13px;color:var(--color-text-secondary);margin-bottom:10px;padding-bottom:6px;border-bottom:0.5px solid var(--color-border-secondary)}
+.pack-header .pack-title{font-weight:600;color:var(--color-text-primary)}
+.pack-delta-pos{color:#2f9e44;font-weight:600}
+.pack-delta-neg{color:#e03131;font-weight:600}
+.pack-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(254px,1fr));gap:22px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.hero-title{
+  margin:0;text-align:center;
+  font-family:Georgia,'Iowan Old Style',Palatino,'Palatino Linotype','Book Antiqua',serif;
+  font-weight:700;font-size:clamp(28px,6vw,44px);letter-spacing:0.08em;text-transform:uppercase;
+  color:#e5484d;
+  background-image:linear-gradient(100deg,#f2c94c 0%,#e5484d 30%,#9966cc 60%,#5588aa 85%,#f2c94c 100%);
+  background-size:220% auto;background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  animation:hero-shimmer 7s linear infinite;
+}
+@keyframes hero-shimmer{0%{background-position:0% center}100%{background-position:220% center}}
+@media (prefers-reduced-motion: reduce){.hero-title{animation:none}}
+.hero-subtitle{text-align:center;margin-top:6px;font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:var(--color-text-secondary)}
+.hero-divider{width:72px;height:2px;margin:16px auto;border-radius:2px;background:linear-gradient(90deg,transparent,#f2c94c,#e5484d,#9966cc,transparent)}
+.hero-desc{text-align:center;max-width:520px;margin:0 auto;font-size:13px;line-height:1.5;color:var(--color-text-secondary)}
+@keyframes glow-pulse-1{
+  0%,100%{box-shadow:0 0 0 8px var(--ring-a),0 0 14px 2px var(--ring-a)}
+  50%{box-shadow:0 0 0 8px var(--ring-a),0 0 24px 7px var(--ring-a)}
+}
+@keyframes glow-pulse-2{
+  0%,100%{box-shadow:0 0 0 8px var(--ring-a),0 0 0 16px var(--ring-b),0 0 14px 2px var(--ring-b)}
+  50%{box-shadow:0 0 0 8px var(--ring-a),0 0 0 16px var(--ring-b),0 0 24px 7px var(--ring-b)}
+}
+.card-front.glow-1{animation:glow-pulse-1 2.6s ease-in-out infinite}
+.card-front.glow-2{animation:glow-pulse-2 2.6s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){
+  .card-front.glow-1,.card-front.glow-2{animation:none;box-shadow:0 0 0 8px var(--ring-a),0 0 0 16px var(--ring-b,transparent)}
+}
 </style>
 
-<div style="padding:1.5rem 0">
-  <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:1.5rem">
-    <div style="display:flex;flex-direction:column;gap:5px">
-      <label style="font-size:13px;color:var(--color-text-secondary)">Set</label>
-      <select id="set-select"><option>Loading sets...</option></select>
+<div style="min-height:100vh;display:flex;flex-direction:column">
+  <header style="padding:2rem 1.5rem 0.5rem">
+    <h2 class="sr-only">MTG pack opening simulator — select a set and number of packs, then open them to reveal cards with a flip animation.</h2>
+    <h1 class="hero-title">Pack Opener</h1>
+    <div class="hero-subtitle">for Magic: The Gathering</div>
+    <div class="hero-divider"></div>
+    <p class="hero-desc">Select a set and number of packs, then open them to reveal cards with a flip animation.</p>
+  </header>
+
+  <main style="flex:1;padding:0 1.5rem 1.5rem">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:1.5rem">
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:13px;color:var(--color-text-secondary)">Set</label>
+        <select id="set-select"><option>Loading sets...</option></select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:13px;color:var(--color-text-secondary)">Pack Type</label>
+        <select id="pack-type-select">
+          <option value="standard" selected>Standard Booster</option>
+          <option value="collector">Collector Booster</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:13px;color:var(--color-text-secondary)">Packs (1–36)</label>
+        <input id="pack-count" type="number" min="1" max="36" value="5" style="width:80px">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">
+        <label style="font-size:13px;color:var(--color-text-secondary)">Price/pack ($)</label>
+        <div style="display:flex;align-items:center;gap:8px;height:36px">
+          <input id="pack-price" type="number" min="0" step="0.01" value="4.99" style="width:90px">
+          <a id="tcg-price-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:12px;color:var(--color-text-secondary);white-space:nowrap">Check price ↗</a>
+        </div>
+      </div>
+      <button id="open-btn" disabled>Open packs</button>
+      <button id="flip-all-btn" style="font-size:13px;padding:0 10px;height:30px;display:none">Reveal all</button>
     </div>
-    <div style="display:flex;flex-direction:column;gap:5px">
-      <label style="font-size:13px;color:var(--color-text-secondary)">Packs</label>
-      <select id="pack-count" style="min-width:80px">
-        <option>1</option><option>2</option><option>3</option>
-        <option selected>5</option><option>6</option>
-        <option>8</option><option>10</option>
-      </select>
+
+    <div id="stats-row" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem">
+      <div class="stat-box"><div class="stat-num" id="s-mythic" style="color:#c07020">0</div><div class="stat-lbl">Mythic</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-rare" style="color:#aa9900">0</div><div class="stat-lbl">Rare</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-uncommon" style="color:#5588aa">0</div><div class="stat-lbl">Uncommon</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-common">0</div><div class="stat-lbl">Common</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-foil" style="color:#9966cc">0</div><div class="stat-lbl">Foil</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-token" style="color:#b08d57">0</div><div class="stat-lbl">Token</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-total">0</div><div class="stat-lbl">Total</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-value" style="color:#2f9e44">$0.00</div><div class="stat-lbl">Value pulled</div></div>
+      <div class="stat-box"><div class="stat-num" id="s-pl">$0.00</div><div class="stat-lbl">Profit / loss</div></div>
     </div>
-    <button id="open-btn" disabled>Open packs</button>
-    <button id="flip-all-btn" style="font-size:13px;padding:0 10px;height:30px;display:none">Reveal all</button>
-  </div>
 
-  <div id="stats-row" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:1.5rem">
-    <div class="stat-box"><div class="stat-num" id="s-mythic" style="color:#c07020">0</div><div class="stat-lbl">Mythic</div></div>
-    <div class="stat-box"><div class="stat-num" id="s-rare" style="color:#aa9900">0</div><div class="stat-lbl">Rare</div></div>
-    <div class="stat-box"><div class="stat-num" id="s-uncommon" style="color:#5588aa">0</div><div class="stat-lbl">Uncommon</div></div>
-    <div class="stat-box"><div class="stat-num" id="s-common">0</div><div class="stat-lbl">Common</div></div>
-    <div class="stat-box"><div class="stat-num" id="s-foil" style="color:#9966cc">0</div><div class="stat-lbl">Foil</div></div>
-    <div class="stat-box"><div class="stat-num" id="s-total">0</div><div class="stat-lbl">Total</div></div>
-  </div>
+    <div id="status-msg" style="font-size:14px;color:var(--color-text-secondary);margin-bottom:1rem"></div>
 
-  <div id="status-msg" style="font-size:14px;color:var(--color-text-secondary);margin-bottom:1rem"></div>
+    <div id="cards-grid"></div>
+  </main>
 
-  <div id="cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(254px,1fr));gap:14px"></div>
+  <footer style="padding:1rem 1.5rem;border-top:0.5px solid var(--color-border-secondary);font-size:12px;line-height:1.5;color:var(--color-text-secondary);text-align:center">
+    This is an unofficial fan project and is not affiliated with, endorsed, or sponsored by Wizards of the Coast or Hasbro. Magic: The Gathering, card names, and card images are property of Wizards of the Coast LLC. Card data and images are provided by <a href="https://scryfall.com" target="_blank" rel="noopener" style="color:inherit">Scryfall</a>. Card values are market prices sourced from TCGplayer via Scryfall's pricing data, updated periodically — treat them as an estimate, not a live quote.
+  </footer>
 </div>
 
 <script>
-const RARITY_COLORS = {mythic:'#c07020',rare:'#aa9900',uncommon:'#5588aa',common:'#888880',land:'#667766'};
+const RARITY_COLORS = {mythic:'#c07020',rare:'#aa9900',uncommon:'#5588aa',common:'#888880',land:'#667766',token:'#b08d57'};
+// Ring colors used to highlight a revealed card's front face. Rare and mythic
+// are mutually exclusive (rarity), foil is independent, so a card can show
+// one or two concentric rings (e.g. a foil rare gets yellow + purple).
+const HIGHLIGHT_COLORS = {mythic:'#e5484d', rare:'#f2c94c', foil:'#9966cc'};
 let cardCache = {};
+let tokenCache = {};
+let bonusSheetCache = {};
+let allPrintsCache = {};
+let mtgJsonCache = {};
+let allSets = []; // full Scryfall set list, used to find each set's companion token set
 let flippedCount = 0;
 let totalCards = 0;
+
+// Historical foil-insertion policy for MTG booster packs:
+//  - Before Urza's Legacy (1999-02-15): no set had foils at all.
+//  - Urza's Legacy through the era ending with Zendikar Rising: foils were a
+//    randomly-inserted chase item, roughly 1 in 6 packs.
+//  - Zendikar Rising (2020-09-25) onward: every pack guarantees 1 foil.
+const ULG_DATE = new Date('1999-02-15'); // Urza's Legacy — first set with foils
+const ZNR_DATE = new Date('2020-09-25'); // Zendikar Rising — guaranteed foil era begins
+const SOA_DATE = new Date('2008-10-03'); // Shards of Alara — mythic rare introduced
+const PBK_DATE = new Date('2024-02-09'); // Murders at Karlov Manor — Play Boosters replace Draft Boosters
+const CB_DATE = new Date('2019-10-04'); // Throne of Eldraine — Collector Boosters begin existing at all
+
+function getFoilRate(releasedAt) {
+  if (!releasedAt) return 1/6; // sensible fallback if a date is ever missing
+  const d = new Date(releasedAt);
+  if (d < ULG_DATE) return 0;
+  if (d < ZNR_DATE) return 1/6;
+  return 1;
+}
+
+function mythicsExistFor(releasedAt) {
+  if (!releasedAt) return true; // sensible fallback if a date is ever missing
+  return new Date(releasedAt) >= SOA_DATE;
+}
+
+// Play Boosters (2024–present) replaced the old single-rare-slot Draft Booster
+// with a guaranteed rare/mythic slot PLUS two "wildcard" slots that can each
+// independently land on any rarity — so a pack can hold extra rares, extra
+// mythics, or both. Older sets never had wildcard slots: exactly one rare-or-
+// mythic card, full stop.
+function isPlayBoosterEra(releasedAt) {
+  if (!releasedAt) return true; // sensible fallback if a date is ever missing
+  return new Date(releasedAt) >= PBK_DATE;
+}
+
+function collectorBoostersExistFor(releasedAt) {
+  if (!releasedAt) return true; // sensible fallback if a date is ever missing
+  return new Date(releasedAt) >= CB_DATE;
+}
+
+// Reads a card's real Scryfall attributes to find any "Booster Fun" special
+// treatment it carries. These fields (finishes, frame_effects, promo_types,
+// border_color) are genuine Scryfall data, not invented — but which specific
+// treatments exist for a set, and how often they actually appear in packs,
+// varies a lot from set to set and isn't something this data alone can tell us.
+function cardTreatments(card) {
+  const fx = card.frame_effects || [];
+  const promo = card.promo_types || [];
+  const finishes = card.finishes || [];
+  return {
+    etched: finishes.includes('etched'),
+    surgefoil: fx.includes('surgefoil') || promo.includes('surgefoil'),
+    showcase: fx.includes('showcase'),
+    extendedart: fx.includes('extendedart'),
+    borderless: card.border_color === 'borderless',
+  };
+}
+function hasSpecialTreatment(card) {
+  const t = cardTreatments(card);
+  return t.etched || t.surgefoil || t.showcase || t.extendedart || t.borderless;
+}
+function foilLabelFor(card) {
+  if (!card._foil) return null;
+  const t = cardTreatments(card);
+  if (t.etched) return 'etched foil';
+  if (t.surgefoil) return 'surge foil';
+  return 'foil';
+}
+
+// Card values come from Scryfall's `prices` field, which Scryfall sources from
+// TCGplayer (USD) — free to read on every card object, no extra request needed
+// for cards that already came from a Scryfall fetch. Picks the price matching
+// the actual finish pulled, falling back to the plain price if a specific
+// foil/etched price isn't listed.
+function cardValue(card) {
+  if (!card.prices) return null;
+  const p = card.prices;
+  let v = null;
+  if (card._foil) {
+    const t = cardTreatments(card);
+    if (t.etched && p.usd_etched) v = p.usd_etched;
+    else if (p.usd_foil) v = p.usd_foil;
+  }
+  if (v==null) v = p.usd;
+  return v!=null ? parseFloat(v) : null;
+}
+
+// Card purchase links: Scryfall's `purchase_uris.tcgplayer` is free on every
+// card object and already points at the correct printing. For MTGJSON-sourced
+// cards without that field, fall back to a direct product-page URL built from
+// MTGJSON's own tcgplayerProductId (using the etched-specific id when the
+// pulled card is actually an etched foil).
+function tcgplayerCardUrl(card) {
+  if (card.purchase_uris && card.purchase_uris.tcgplayer) return card.purchase_uris.tcgplayer;
+  const t = cardTreatments(card);
+  if (card._foil && t.etched && card._tcgplayerEtchedId) return `https://www.tcgplayer.com/product/${card._tcgplayerEtchedId}`;
+  if (card._tcgplayerId) return `https://www.tcgplayer.com/product/${card._tcgplayerId}`;
+  return null;
+}
+
+// MTGJSON's per-set files don't include prices, but every card carries a
+// scryfallId — batch those up (Scryfall's collection endpoint takes up to 75
+// at once) and fill in `prices` after the fact. Best-effort: any failure here
+// just means those cards show no price tag, nothing else breaks.
+async function enrichWithPrices(packs) {
+  const idsNeeded = new Set();
+  for (const pack of packs) for (const c of pack) {
+    if (!c.prices && c._scryfallId) idsNeeded.add(c._scryfallId);
+  }
+  if (!idsNeeded.size) return;
+  const ids = [...idsNeeded];
+  const priceMap = {};
+  for (let i=0;i<ids.length;i+=75) {
+    const batch = ids.slice(i,i+75);
+    try {
+      const res = await fetch('https://api.scryfall.com/cards/collection', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({identifiers: batch.map(id=>({id}))})
+      });
+      const data = await res.json();
+      if (data.data) for (const c of data.data) priceMap[c.id]={prices:c.prices, purchase_uris:c.purchase_uris};
+    } catch(e) { /* pricing enrichment is best-effort */ }
+    await new Promise(r=>setTimeout(r,100));
+  }
+  for (const pack of packs) for (const c of pack) {
+    if (!c.prices && c._scryfallId && priceMap[c._scryfallId]) {
+      c.prices = priceMap[c._scryfallId].prices;
+      c.purchase_uris = priceMap[c._scryfallId].purchase_uris;
+    }
+  }
+}
+
+function foilEraLabel(rate) {
+  if (rate === 0) return 'no foils in this era';
+  if (rate === 1) return 'guaranteed foil every pack';
+  return '~1-in-6 pack foil rate';
+}
+
+// Scryfall returns an {object:"error"} payload (e.g. rate limiting, or a
+// search with zero matches) instead of a card list on failure. Without this
+// check, `data.data` is undefined and gets pushed straight into the card
+// array, which then throws deep inside categorize() with no useful message.
+async function scryfallFetch(url, attempt) {
+  attempt = attempt || 0;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.object === 'error') {
+    if (res.status === 429 && attempt < 3) { // rate limited — back off and retry a few times
+      await new Promise(r=>setTimeout(r, 700*(attempt+1)));
+      return scryfallFetch(url, attempt+1);
+    }
+    throw new Error(data.details || `Scryfall couldn't complete that request (status ${res.status}).`);
+  }
+  return data;
+}
 
 async function loadSets() {
   const sel = document.getElementById('set-select');
   try {
     const res = await fetch('https://api.scryfall.com/sets');
     const data = await res.json();
+    allSets = data.data;
     const valid = data.data.filter(s =>
       ['core','expansion','masters','draft_innovation'].includes(s.set_type) &&
       s.card_count > 100 && new Date(s.released_at) <= new Date()
     ).sort((a,b) => new Date(b.released_at) - new Date(a.released_at)).slice(0,600);
-    sel.innerHTML = valid.map(s=>`<option value="${s.code}">${s.name} (${s.released_at.slice(0,4)})</option>`).join('');
+    sel.innerHTML = valid.map(s=>`<option value="${s.code}" data-released="${s.released_at}">${s.name} (${s.released_at.slice(0,4)})</option>`).join('');
     document.getElementById('open-btn').disabled = false;
+    updateTcgLink();
   } catch(e) {
     sel.innerHTML = '<option>Failed to load sets</option>';
   }
 }
 
+// A plain TCGplayer search link always works and needs no extra data.
+function tcgplayerSearchUrl(setName, packType) {
+  const term = `${setName} ${packType==='collector'?'Collector Booster':'Play Booster'}`;
+  return `https://www.tcgplayer.com/search/magic/product?productLineName=magic&q=${encodeURIComponent(term)}&view=grid`;
+}
+
+// Sets the search-link fallback immediately, then tries to upgrade it to a
+// direct product page using MTGJSON's sealedProduct data (which carries the
+// real tcgplayerProductId) — best-effort, since not every set has this data
+// or the fetch may not succeed at all (see the MTGJSON engine notes above).
+async function updateTcgLink() {
+  const link = document.getElementById('tcg-price-link');
+  const setCode = document.getElementById('set-select').value;
+  if (!setCode) { link.style.display='none'; return; }
+  const setInfo = allSets.find(s => s.code === setCode);
+  const setName = setInfo ? setInfo.name : '';
+  if (!setName) { link.style.display='none'; return; }
+  const packType = document.getElementById('pack-type-select').value;
+  link.href = tcgplayerSearchUrl(setName, packType);
+  link.textContent = 'Check price ↗';
+  link.style.display='';
+  try {
+    const setData = await fetchMtgJsonSet(setCode);
+    if (setData && setData.sealedProduct && setData.sealedProduct.length) {
+      const wantCollector = packType==='collector';
+      const match = setData.sealedProduct.find(p => {
+        const cat = (p.category||'').toLowerCase();
+        if (!cat.includes('booster')) return false;
+        const sub = ((p.subtype||'')+' '+(p.name||'')).toLowerCase();
+        const isCollector = sub.includes('collector');
+        return wantCollector ? isCollector : !isCollector;
+      });
+      const pid = match && match.identifiers && match.identifiers.tcgplayerProductId;
+      // Only upgrade if the selected set is still the one this lookup was for
+      // (guards against a slow fetch resolving after the user already changed sets).
+      if (pid && document.getElementById('set-select').value===setCode) {
+        link.href = `https://www.tcgplayer.com/product/${pid}`;
+        link.textContent = 'View on TCGplayer ↗';
+      }
+    }
+  } catch(e) { /* keep the search-link fallback */ }
+}
+
+document.getElementById('set-select').addEventListener('change', updateTcgLink);
+document.getElementById('pack-type-select').addEventListener('change', updateTcgLink);
+
+
+async function fetchCardsByQuery(query) {
+  let cards = [], url = `https://api.scryfall.com/cards/search?q=${query}&order=set`;
+  while (url) {
+    await new Promise(r=>setTimeout(r,100));
+    const data = await scryfallFetch(url);
+    cards = cards.concat(data.data||[]);
+    url = data.has_more ? data.next_page : null;
+  }
+  return cards;
+}
+
 async function fetchSetCards(setCode) {
   if (cardCache[setCode]) return cardCache[setCode];
   document.getElementById('status-msg').textContent = 'Fetching card data...';
-  let cards = [], url = `https://api.scryfall.com/cards/search?q=set:${setCode}+is:booster&order=set`;
-  while (url) {
-    await new Promise(r=>setTimeout(r,80));
-    const res = await fetch(url);
-    const data = await res.json();
-    cards = cards.concat(data.data);
-    url = data.has_more ? data.next_page : null;
+  let cards;
+  try {
+    cards = await fetchCardsByQuery(`set:${setCode}+is:booster`);
+  } catch (e) {
+    // Very recent sets are sometimes missing the is:booster tag before Scryfall
+    // finishes cataloguing them — fall back to every card printed in the set.
+    cards = await fetchCardsByQuery(`set:${setCode}`);
   }
   cardCache[setCode] = cards;
   return cards;
+}
+
+// Many sets shipped a companion "token" product (creature tokens, emblems,
+// etc). Scryfall tracks these as their own set with parent_set_code pointing
+// back at the main set, so we look that up and pull its cards separately.
+async function fetchTokensForSet(mainCode) {
+  if (tokenCache[mainCode]) return tokenCache[mainCode];
+  const tokenSet = allSets.find(s => s.set_type === 'token' && s.parent_set_code === mainCode);
+  if (!tokenSet) { tokenCache[mainCode] = []; return []; }
+  document.getElementById('status-msg').textContent = 'Fetching token data...';
+  let cards = [], url = `https://api.scryfall.com/cards/search?q=set:${tokenSet.code}&order=set`;
+  try {
+    while (url) {
+      await new Promise(r=>setTimeout(r,100));
+      const data = await scryfallFetch(url);
+      cards = cards.concat(data.data||[]);
+      url = data.has_more ? data.next_page : null;
+    }
+  } catch(e) { /* no tokens available — treat as none rather than failing the whole open */ }
+  tokenCache[mainCode] = cards;
+  return cards;
+}
+
+// Bonus sheets (Mystical Archive, Through the Ages, etc.) are extra reprint
+// cards tied to a specific set, mixed into its boosters. Scryfall catalogues
+// them as their own "masterpiece"-type set with parent_set_code pointing back
+// at the main set — the same relationship pattern as companion token sets.
+async function fetchBonusSheetForSet(mainCode) {
+  if (bonusSheetCache[mainCode] !== undefined) return bonusSheetCache[mainCode];
+  const bonusSet = allSets.find(s => s.set_type === 'masterpiece' && s.parent_set_code === mainCode);
+  if (!bonusSet) { bonusSheetCache[mainCode] = null; return null; }
+  let cards = [];
+  try { cards = await fetchCardsByQuery(`set:${bonusSet.code}`); } catch(e) { cards = []; }
+  const result = cards.length ? {name: bonusSet.name, cards} : null;
+  bonusSheetCache[mainCode] = result;
+  return result;
+}
+
+// Collector Booster "Booster Fun" treatments (showcase, extended art,
+// borderless, surge foil, etched foil) usually live on separate print entries
+// that aren't tagged is:booster, since they're Collector-Booster-exclusive.
+// This pulls every print in the set so we can find them.
+async function fetchAllPrintsForSet(setCode) {
+  if (allPrintsCache[setCode]) return allPrintsCache[setCode];
+  let cards = [];
+  try { cards = await fetchCardsByQuery(`set:${setCode}`); } catch(e) { cards = []; }
+  allPrintsCache[setCode] = cards;
+  return cards;
+}
+
+// ---- MTGJSON booster engine (optional, higher-accuracy path) ----
+// MTGJSON publishes each set's *actual* booster configuration: the exact
+// sheets Wizards uses, their real card-level weights, and which sheets are
+// foil. This is a genuinely different tier of accuracy from the approximated
+// model below. It only works if mtgjson.com allows cross-origin fetches from
+// the browser the way Scryfall does — if it doesn't (or the data is missing
+// or shaped unexpectedly), every function here fails soft to null so the
+// approximated engine below can take over with no visible error.
+async function fetchMtgJsonSet(setCode) {
+  const key = setCode.toUpperCase();
+  if (mtgJsonCache[key] !== undefined) return mtgJsonCache[key];
+  let result = null;
+  try {
+    const res = await fetch(`https://mtgjson.com/api/v5/${key}.json`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.data) result = json.data;
+    }
+  } catch(e) { /* CORS-blocked, offline, or malformed — leave result null */ }
+  mtgJsonCache[key] = result;
+  return result;
+}
+
+function scryfallImageFromId(id) {
+  if (!id || id.length < 3) return null;
+  return `https://cards.scryfall.io/normal/front/${id[0]}/${id[1]}/${id}.jpg`;
+}
+
+function mtgjsonRarity(mc) {
+  if (mc.rarity==='mythic') return 'mythic';
+  if (mc.rarity==='rare') return 'rare';
+  if (mc.rarity==='uncommon') return 'uncommon';
+  if (mc.type && mc.type.includes('Basic Land')) return 'land';
+  return 'common';
+}
+
+// Adapts an MTGJSON Card (Set) object into the same shape the rest of the app
+// already understands (matching Scryfall's field names), so renderCards(),
+// cardTreatments(), foilLabelFor(), etc. all work unmodified regardless of source.
+function mtgjsonCardToInternal(mc, mainCode) {
+  const scryfallId = mc.identifiers && mc.identifiers.scryfallId;
+  const img = scryfallImageFromId(scryfallId);
+  const card = {
+    name: mc.name,
+    type_line: mc.type,
+    finishes: mc.finishes||[],
+    frame_effects: mc.frameEffects||[],
+    promo_types: mc.promoTypes||[],
+    border_color: mc.borderColor,
+    full_art: !!mc.isFullArt,
+    image_uris: img ? {normal: img} : undefined,
+    _scryfallId: scryfallId || null, // used later to batch-fetch prices, which MTGJSON's set files don't include
+    _tcgplayerId: (mc.identifiers && mc.identifiers.tcgplayerProductId) || null,
+    _tcgplayerEtchedId: (mc.identifiers && mc.identifiers.tcgplayerEtchedProductId) || null,
+  };
+  card._rarity = mtgjsonRarity(mc);
+  // A card pulled into this set's boosters but tagged with a *different*
+  // setCode is a token or bonus-sheet insert (e.g. Mystical Archive) — cross-
+  // reference our already-fetched Scryfall sets list to label it properly.
+  if (mc.setCode && mc.setCode.toLowerCase() !== mainCode.toLowerCase()) {
+    const s = allSets.find(x => x.code === mc.setCode.toLowerCase());
+    if (s && s.set_type === 'token') card._rarity = 'token';
+    else card._bonusSheet = s ? s.name : mc.setCode.toUpperCase();
+  }
+  return card;
+}
+
+function weightedPick(items, weightFn) {
+  const total = items.reduce((s,i)=>s+(weightFn(i)||0),0);
+  if (!total) return items[Math.floor(Math.random()*items.length)];
+  let r = Math.random()*total;
+  for (const item of items) {
+    r -= weightFn(item)||0;
+    if (r<=0) return item;
+  }
+  return items[items.length-1];
+}
+
+function pickUuidsFromSheet(sheet, count) {
+  let remaining = Object.entries(sheet.cards||{}); // [uuid, weight][]
+  const picked = [];
+  for (let i=0;i<count && remaining.length;i++) {
+    const totalW = remaining.reduce((s,[,w])=>s+w,0);
+    let r = Math.random()*totalW, idx=remaining.length-1;
+    for (let j=0;j<remaining.length;j++){ r-=remaining[j][1]; if(r<=0){idx=j;break;} }
+    picked.push(remaining[idx][0]);
+    if (!sheet.allowDuplicates) remaining.splice(idx,1);
+  }
+  return picked;
+}
+
+function pickBoosterConfigKey(boosterMap, packType) {
+  const keys = Object.keys(boosterMap||{});
+  if (!keys.length) return null;
+  const collectorKey = keys.find(k=>/collector/i.test(k));
+  const otherKeys = keys.filter(k=>k!==collectorKey);
+  const playKey = otherKeys.find(k=>/play|draft|default/i.test(k)) || otherKeys[0] || keys[0];
+  return packType==='collector' ? (collectorKey||playKey) : playKey;
+}
+
+const MTGJSON_RARITY_SORT = {common:0, uncommon:1, rare:2, mythic:2, land:3, token:4};
+
+function buildOneMtgJsonPack(setData, configKey, cardIndex, mainCode) {
+  const config = setData.booster[configKey];
+  if (!config || !config.boosters || !config.boosters.length || !config.sheets) return null;
+  const boosterPack = weightedPick(config.boosters, b=>b.weight||1);
+  const contents = (boosterPack && boosterPack.contents) || {};
+  const cards = [];
+  for (const [sheetName, count] of Object.entries(contents)) {
+    const sheet = config.sheets[sheetName];
+    if (!sheet || !count) continue;
+    const uuids = pickUuidsFromSheet(sheet, count);
+    for (const uuid of uuids) {
+      const mc = cardIndex[uuid];
+      if (!mc) continue;
+      const card = mtgjsonCardToInternal(mc, mainCode);
+      if (sheet.foil) card._foil = true;
+      cards.push(card);
+    }
+  }
+  if (!cards.length) return null;
+  cards.sort((a,b)=>(MTGJSON_RARITY_SORT[a._rarity]??2)-(MTGJSON_RARITY_SORT[b._rarity]??2));
+  return cards;
+}
+
+async function tryBuildPacksFromMtgJson(setCode, packType, numPacks) {
+  const setData = await fetchMtgJsonSet(setCode);
+  if (!setData || !setData.booster || !setData.cards) return null;
+  const configKey = pickBoosterConfigKey(setData.booster, packType);
+  if (!configKey) return null;
+  const cardIndex = {};
+  for (const c of setData.cards) cardIndex[c.uuid] = c;
+  if (setData.tokens) for (const c of setData.tokens) cardIndex[c.uuid] = c;
+  const packs = [];
+  for (let i=0;i<numPacks;i++) {
+    const pack = buildOneMtgJsonPack(setData, configKey, cardIndex, setCode);
+    if (!pack) return null; // bail entirely rather than mix sources mid-batch
+    packs.push(pack);
+  }
+  return packs;
 }
 
 function categorize(cards) {
@@ -114,17 +592,123 @@ function pick(arr, n) {
   return out;
 }
 
-function buildPack(b) {
-  const pack=[];
-  const isMythic=Math.random()<0.125;
-  const rarePool=isMythic&&b.mythic.length?b.mythic:b.rare;
-  pack.push(...pick(rarePool,1).map(c=>({...c,_rarity:isMythic?'mythic':'rare'})));
-  pack.push(...pick(b.uncommon,3).map(c=>({...c,_rarity:'uncommon'})));
-  pack.push(...pick(b.common,10).map(c=>({...c,_rarity:'common'})));
+// Draws one rare-or-mythic card, respecting whether this set's era has
+// mythics at all. The returned card's _rarity always matches the pool it was
+// actually drawn from (this used to be a source of mislabeled cards).
+function rollRareOrMythic(b, mythicsExist, mythicRate) {
+  const isMythic = mythicsExist && b.mythic.length>0 && Math.random()<mythicRate;
+  const pool = isMythic ? b.mythic : b.rare;
+  return pick(pool,1).map(c=>({...c,_rarity:isMythic?'mythic':'rare'}));
+}
+
+// A Play Booster "wildcard" slot can land on any rarity. ~24% of the time
+// it's rare-or-mythic tier (split by the same mythicRate as the guaranteed
+// slot), otherwise it's a bonus common or uncommon. These odds are tuned so
+// that, combined with the guaranteed slot, roughly 58%/37%/5% of packs end
+// up with 1/2/3+ total rares-or-mythics — matching the real-world rates.
+function rollWildcard(b, mythicsExist, mythicRate) {
+  const roll = Math.random();
+  if (roll < 0.24) return rollRareOrMythic(b, mythicsExist, mythicRate);
+  if (roll < 0.50) return pick(b.uncommon,1).map(c=>({...c,_rarity:'uncommon'}));
+  return pick(b.common,1).map(c=>({...c,_rarity:'common'}));
+}
+
+// Bonus sheet cards keep their own real rarity (most sheets are mostly
+// uncommon with a minority of rares/mythics), so a uniform random pick across
+// the sheet's card list naturally reflects that mix without extra weighting.
+function rollBonusSheetCard(bonusSheet) {
+  if (!bonusSheet || !bonusSheet.cards.length) return null;
+  const c = pick(bonusSheet.cards,1)[0];
+  if (!c) return null;
+  const rarity = c.rarity==='mythic'?'mythic':c.rarity==='rare'?'rare':'uncommon';
+  return {...c, _rarity:rarity, _bonusSheet:bonusSheet.name};
+}
+
+// Swaps in `count` bonus-sheet cards, replacing existing slots (least-precious
+// first) so the total card count doesn't change. Cards are bucketed by their
+// own real rarity so the rarity ring/dot still reflects what was actually pulled.
+function insertBonusSheetCards(bonusSheet, count, commons, uncommons, rares) {
+  for (let i=0;i<count;i++) {
+    const bc = rollBonusSheetCard(bonusSheet);
+    if (!bc) break;
+    if (bc._rarity==='common') { if(commons.length) commons.pop(); }
+    else if (bc._rarity==='uncommon') { if(uncommons.length) uncommons.pop(); else if(commons.length) commons.pop(); }
+    else { if(rares.length) rares.pop(); }
+    if (bc._rarity==='mythic'||bc._rarity==='rare') rares.push(bc);
+    else uncommons.push(bc);
+  }
+}
+
+function buildPack(b, foilRate, mythicsExist, playBoosterEra, packType, bonusSheet, specialPool) {
+  const commons=[], uncommons=[], rares=[];
+
+  if (packType === 'collector') {
+    // Generic modern Collector Booster shape: 5 rare-or-mythic, 4 uncommon, 5
+    // common, 1 land — a reasonable approximation (Bloomburrow's actual
+    // breakdown), not an exact replica of any specific set's real numbers,
+    // which vary set to set far more than Standard Boosters do.
+    let rareSlots=5, uncommonSlots=4, commonSlots=5;
+    if (specialPool && specialPool.length) {
+      // Guarantee at least one real "Booster Fun" treatment print if the set has any.
+      const special = pick(specialPool,1)[0];
+      if (special) {
+        const rarity = special.rarity==='mythic'?'mythic':special.rarity==='rare'?'rare':special.rarity==='uncommon'?'uncommon':'common';
+        const tagged = {...special,_rarity:rarity};
+        if (rarity==='common') { commons.push(tagged); commonSlots--; }
+        else if (rarity==='uncommon') { uncommons.push(tagged); uncommonSlots--; }
+        else { rares.push(tagged); rareSlots--; }
+      }
+    }
+    for (let i=0;i<rareSlots;i++) rares.push(...rollRareOrMythic(b, mythicsExist, 1/7));
+    uncommons.push(...pick(b.uncommon,uncommonSlots).map(c=>({...c,_rarity:'uncommon'})));
+    commons.push(...pick(b.common,commonSlots).map(c=>({...c,_rarity:'common'})));
+    if (bonusSheet) insertBonusSheetCards(bonusSheet, 3, commons, uncommons, rares);
+    // Collector Boosters are overwhelmingly foil — roll each card independently
+    // at a high rate instead of a single guaranteed-foil slot.
+    [...commons, ...uncommons, ...rares].forEach(c => { if (Math.random() < 0.85) c._foil = true; });
+    const pack=[...commons, ...uncommons, ...rares];
+    const lp=b.land.length?b.land:b.common;
+    const land=pick(lp,1).map(c=>({...c,_rarity:'land'}))[0];
+    if (land) { if (Math.random()<0.85) land._foil=true; pack.push(land); }
+    if(b.token&&b.token.length) pack.push(...pick(b.token,1).map(c=>({...c,_rarity:'token'})));
+    return pack;
+  }
+
+  if (playBoosterEra) {
+    // Modern Play Booster (2024–present): 7 commons, 3 uncommons, 1
+    // guaranteed rare/mythic (~1-in-7 mythic), plus 2 wildcard slots that can
+    // each independently add an extra common, uncommon, rare, or mythic.
+    commons.push(...pick(b.common,7).map(c=>({...c,_rarity:'common'})));
+    uncommons.push(...pick(b.uncommon,3).map(c=>({...c,_rarity:'uncommon'})));
+    rares.push(...rollRareOrMythic(b, mythicsExist, 1/7));
+    for (let i=0;i<2;i++) {
+      const w = rollWildcard(b, mythicsExist, 1/7);
+      if (!w.length) continue;
+      const r = w[0]._rarity;
+      if (r==='common') commons.push(...w);
+      else if (r==='uncommon') uncommons.push(...w);
+      else rares.push(...w);
+    }
+    // Bonus sheets typically show up in roughly 1 in 3 Standard Boosters,
+    // replacing what would otherwise be a common (this varies by set — some
+    // sets guarantee one every pack — but a 1-in-3 default is a fair middle ground).
+    if (bonusSheet && Math.random() < 0.33) insertBonusSheetCards(bonusSheet, 1, commons, uncommons, rares);
+  } else {
+    // Classic Draft Booster (pre-2024): exactly one rare-or-mythic slot, full stop.
+    commons.push(...pick(b.common,10).map(c=>({...c,_rarity:'common'})));
+    uncommons.push(...pick(b.uncommon,3).map(c=>({...c,_rarity:'uncommon'})));
+    rares.push(...rollRareOrMythic(b, mythicsExist, 0.125));
+    if (bonusSheet && Math.random() < 0.33) insertBonusSheetCards(bonusSheet, 1, commons, uncommons, rares);
+  }
+
+  // Display/pull order: common, uncommon, rare/mythic, land, then a bonus token if the set has any.
+  const pack=[...commons, ...uncommons, ...rares];
   const lp=b.land.length?b.land:b.common;
   pack.push(...pick(lp,1).map(c=>({...c,_rarity:'land'})));
-  const fi=Math.random()<0.25?Math.floor(Math.random()*pack.length):-1;
+  // Foil is rolled among the normal card slots only — the token afterward isn't a foil-eligible slot.
+  const fi=Math.random()<foilRate?Math.floor(Math.random()*pack.length):-1;
   if(fi>=0) pack[fi]._foil=true;
+  if(b.token&&b.token.length) pack.push(...pick(b.token,1).map(c=>({...c,_rarity:'token'})));
   return pack;
 }
 
@@ -134,60 +718,113 @@ function getImg(card) {
   return null;
 }
 
-function renderCards(packs) {
+function renderCards(packs, pricePerPack) {
   const grid=document.getElementById('cards-grid');
   grid.innerHTML='';
-  let stats={mythic:0,rare:0,uncommon:0,common:0,foil:0,total:0};
+  let stats={mythic:0,rare:0,uncommon:0,common:0,foil:0,token:0,total:0,value:0};
   flippedCount=0; totalCards=0;
 
-  for (const pack of packs) {
+  packs.forEach((pack, packIdx) => {
+    const packGroup=document.createElement('div');
+    packGroup.className='pack-group';
+    const header=document.createElement('div');
+    header.className='pack-header';
+    const cardsGrid=document.createElement('div');
+    cardsGrid.className='pack-cards-grid';
+    let packValue=0;
+
     for (const card of pack) {
       totalCards++;
       const r=card._rarity;
       if(r==='mythic') stats.mythic++;
       else if(r==='rare') stats.rare++;
       else if(r==='uncommon') stats.uncommon++;
+      else if(r==='token') stats.token++;
       else stats.common++;
       if(card._foil) stats.foil++;
       stats.total++;
+      const value=cardValue(card);
+      if (value!=null) { packValue+=value; stats.value+=value; }
 
       const wrap=document.createElement('div');
       wrap.className='card-wrap';
       const imgSrc=getImg(card);
       const dotColor=RARITY_COLORS[r]||'#888';
+      const isFullArt=!!card.full_art;
+      const foilLabel=foilLabelFor(card);
+      const rings=[];
+      if(r==='mythic') rings.push(HIGHLIGHT_COLORS.mythic);
+      else if(r==='rare') rings.push(HIGHLIGHT_COLORS.rare);
+      if(card._foil) rings.push(HIGHLIGHT_COLORS.foil);
+      let glowClass='', glowVars='';
+      if(rings.length===1){ glowClass='glow-1'; glowVars=`--ring-a:${rings[0]};`; }
+      else if(rings.length===2){ glowClass='glow-2'; glowVars=`--ring-a:${rings[0]};--ring-b:${rings[1]};`; }
       wrap.innerHTML=`<div class="card-inner">
         <div class="card-face card-back"><img src="https://cards.scryfall.io/back.png" alt="Card back"></div>
-        <div class="card-face card-front">
+        <div class="card-face card-front ${glowClass}" style="${glowVars}">
           ${imgSrc?`<img src="${imgSrc}" alt="${card.name}" loading="lazy">`:`<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:12px;color:#aaa;padding:8px;text-align:center">${card.name}</div>`}
           <div class="rarity-dot" style="background:${dotColor}"></div>
-          ${card._foil?'<div class="foil-label">foil</div>':''}
+          ${foilLabel?`<div class="foil-label">${foilLabel}</div>`:''}
+          ${isFullArt?'<div class="fullart-label">full art</div>':''}
+          ${card._bonusSheet?`<div class="bonus-label">${card._bonusSheet}</div>`:''}
+          ${value!=null?`<div class="price-tag">$${value.toFixed(2)}</div>`:''}
         </div>
       </div>`;
+      wrap.title='Click to reveal';
+      wrap._tcgUrl=tcgplayerCardUrl(card);
       wrap.addEventListener('click',()=>{
         if(!wrap.classList.contains('flipped')){
           wrap.classList.add('flipped');
           flippedCount++;
-          if(flippedCount===totalCards) document.getElementById('flip-all-btn').textContent='Flip all back';
+          wrap.title=wrap._tcgUrl?'Click to view on TCGplayer':'';
+          if(flippedCount===totalCards) {
+            document.getElementById('flip-all-btn').style.display='none';
+            document.getElementById('stats-row').style.display='flex';
+            document.querySelectorAll('.pack-value-info').forEach(el=>el.style.display='');
+          }
+        } else if(wrap._tcgUrl) {
+          window.open(wrap._tcgUrl,'_blank','noopener');
         }
       });
-      grid.appendChild(wrap);
+      cardsGrid.appendChild(wrap);
     }
-  }
 
+    const delta=packValue-pricePerPack;
+    const deltaClass=delta>=0?'pack-delta-pos':'pack-delta-neg';
+    const deltaSign=delta>=0?'+':'−';
+    header.innerHTML=`<span class="pack-title">Pack ${packIdx+1}</span><span class="pack-value-info" style="display:none">$${packValue.toFixed(2)} pulled</span><span class="pack-value-info ${deltaClass}" style="display:none">${deltaSign}$${Math.abs(delta).toFixed(2)}</span><span class="pack-value-info" style="display:none">(cost $${pricePerPack.toFixed(2)})</span>`;
+    packGroup.appendChild(header);
+    packGroup.appendChild(cardsGrid);
+    grid.appendChild(packGroup);
+  });
+
+  const totalCost=pricePerPack*packs.length;
+  const totalPL=stats.value-totalCost;
   document.getElementById('s-mythic').textContent=stats.mythic;
   document.getElementById('s-rare').textContent=stats.rare;
   document.getElementById('s-uncommon').textContent=stats.uncommon;
   document.getElementById('s-common').textContent=stats.common;
   document.getElementById('s-foil').textContent=stats.foil;
+  document.getElementById('s-token').textContent=stats.token;
   document.getElementById('s-total').textContent=stats.total;
-  document.getElementById('stats-row').style.display='flex';
+  document.getElementById('s-value').textContent=`$${stats.value.toFixed(2)}`;
+  const plEl=document.getElementById('s-pl');
+  plEl.textContent=`${totalPL>=0?'+':'−'}$${Math.abs(totalPL).toFixed(2)}`;
+  plEl.style.color=totalPL>=0?'#2f9e44':'#e03131';
+  // Stats stay hidden until every card is flipped — no peeking at the haul before you reveal it.
   document.getElementById('flip-all-btn').style.display='';
   document.getElementById('flip-all-btn').textContent='Reveal all';
 }
 
 document.getElementById('open-btn').addEventListener('click',async()=>{
-  const setCode=document.getElementById('set-select').value;
-  const numPacks=parseInt(document.getElementById('pack-count').value);
+  const setSelect=document.getElementById('set-select');
+  const setCode=setSelect.value;
+  const releasedAt=setSelect.selectedOptions[0]?.dataset.released;
+  const packType=document.getElementById('pack-type-select').value;
+  const packInput=document.getElementById('pack-count');
+  let numPacks=parseInt(packInput.value)||1;
+  numPacks=Math.min(36,Math.max(1,numPacks));
+  packInput.value=numPacks;
   const btn=document.getElementById('open-btn');
   const msg=document.getElementById('status-msg');
   btn.disabled=true;
@@ -195,28 +832,83 @@ document.getElementById('open-btn').addEventListener('click',async()=>{
   document.getElementById('stats-row').style.display='none';
   document.getElementById('cards-grid').innerHTML='';
   try {
-    const cards=await fetchSetCards(setCode);
-    const buckets=categorize(cards);
-    if(!buckets.rare.length&&!buckets.mythic.length){
-      msg.textContent='Not enough cards found for this set. Try another.';
-      btn.disabled=false; return;
+    const tokens=await fetchTokensForSet(setCode);
+    msg.textContent='Checking for official MTGJSON pull rates...';
+    let packs=null;
+    try { packs = await tryBuildPacksFromMtgJson(setCode, packType, numPacks); } catch(e) { packs=null; }
+
+    // Top up any MTGJSON pack missing a token/ad-card slot using our own token pool —
+    // MTGJSON's booster config doesn't always model that non-playable 15th slot.
+    if (packs && tokens.length) {
+      for (const pack of packs) {
+        if (!pack.some(c=>c._rarity==='token')) pack.push(...pick(tokens,1).map(c=>({...c,_rarity:'token'})));
+      }
     }
-    const packs=[];
-    for(let i=0;i<numPacks;i++) packs.push(buildPack(buckets));
-    msg.textContent=`Opened ${numPacks} pack${numPacks>1?'s':''} — click cards to reveal!`;
-    renderCards(packs);
+
+    let eraNote;
+    if (packs) {
+      eraNote='using official MTGJSON pull rates';
+    } else {
+      const cards=await fetchSetCards(setCode);
+      const buckets=categorize(cards);
+      if(!buckets.rare.length&&!buckets.mythic.length){
+        msg.textContent='Not enough cards found for this set. Try another.';
+        btn.disabled=false; return;
+      }
+      buckets.token=tokens;
+      const bonusSheet=await fetchBonusSheetForSet(setCode);
+      let specialPool=null;
+      if (packType==='collector') {
+        const allPrints=await fetchAllPrintsForSet(setCode);
+        specialPool=allPrints.filter(hasSpecialTreatment);
+      }
+      const foilRate=getFoilRate(releasedAt);
+      const mythicsExist=mythicsExistFor(releasedAt);
+      const playBoosterEra=isPlayBoosterEra(releasedAt);
+      const cbExist=collectorBoostersExistFor(releasedAt);
+      packs=[];
+      for(let i=0;i<numPacks;i++) packs.push(buildPack(buckets, foilRate, mythicsExist, playBoosterEra, packType, bonusSheet, specialPool));
+      eraNote=foilEraLabel(foilRate)+(mythicsExist?'':'; no mythic rares in this era');
+      if (packType==='collector') {
+        eraNote+='; approximate Collector Booster odds'+(cbExist?'':' (this set predates real Collector Boosters)');
+      } else if (playBoosterEra) {
+        eraNote+='; wildcard slots can add bonus rares/mythics';
+      }
+      if (bonusSheet) eraNote+=`; includes ${bonusSheet.name} bonus sheet`;
+    }
+    msg.textContent='Fetching card values...';
+    await enrichWithPrices(packs);
+    let pricePerPack=parseFloat(document.getElementById('pack-price').value);
+    if (!isFinite(pricePerPack) || pricePerPack<0) pricePerPack=0;
+    msg.textContent=`Opened ${numPacks} pack${numPacks>1?'s':''} — click cards to reveal! (${eraNote})`;
+    renderCards(packs, pricePerPack);
   } catch(e) {
-    msg.textContent='Error loading cards. Please try again.';
+    msg.textContent = `Couldn't load cards — ${e.message || 'please try again.'}`;
   }
   btn.disabled=false;
 });
 
+document.getElementById('pack-type-select').addEventListener('change',()=>{
+  const priceInput=document.getElementById('pack-price');
+  const defaults={standard:'4.99', collector:'14.99'};
+  const type=document.getElementById('pack-type-select').value;
+  // Only snap to the new default if the price is still sitting at either known
+  // default — leaves a manually-typed price alone.
+  if (priceInput.value==='4.99' || priceInput.value==='14.99') priceInput.value=defaults[type];
+});
+
 document.getElementById('flip-all-btn').addEventListener('click',()=>{
   const wraps=document.querySelectorAll('.card-wrap');
-  const anyUnflipped=[...wraps].some(w=>!w.classList.contains('flipped'));
-  wraps.forEach(w=>anyUnflipped?w.classList.add('flipped'):w.classList.remove('flipped'));
-  flippedCount=anyUnflipped?totalCards:0;
-  document.getElementById('flip-all-btn').textContent=anyUnflipped?'Flip all back':'Reveal all';
+  wraps.forEach(w=>{
+    if (!w.classList.contains('flipped')) {
+      w.classList.add('flipped');
+      w.title=w._tcgUrl?'Click to view on TCGplayer':'';
+    }
+  });
+  flippedCount=totalCards;
+  document.getElementById('stats-row').style.display='flex';
+  document.querySelectorAll('.pack-value-info').forEach(el=>el.style.display='');
+  document.getElementById('flip-all-btn').style.display='none';
 });
 
 loadSets();
